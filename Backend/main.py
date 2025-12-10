@@ -52,6 +52,8 @@ class ScanResult(BaseModel):
     is_duplicate: bool
     duplicate_source_id: Optional[str]
     anomalies: List[Anomaly]
+    scanned_at: str
+    processing_time: int
 
 
 class UploadResponse(BaseModel):
@@ -166,9 +168,10 @@ def analyze_text(text: str) -> dict:
     }
 
 
-def build_result_from_name(task_id: str, filename: str) -> ScanResult:
+def build_result_from_name(task_id: str, filename: str, processing_time: int = 0) -> ScanResult:
     """Fallback simple heuristic based on filename for non-PDF or unreadable files."""
     name = filename.lower()
+    scanned_at = datetime.now().isoformat()
 
     if "fraud" in name:
         anomalies = [
@@ -192,6 +195,8 @@ def build_result_from_name(task_id: str, filename: str) -> ScanResult:
             is_duplicate=False,
             duplicate_source_id=None,
             anomalies=anomalies,
+            scanned_at=scanned_at,
+            processing_time=processing_time,
         )
 
     if "duplicate" in name:
@@ -211,6 +216,8 @@ def build_result_from_name(task_id: str, filename: str) -> ScanResult:
             is_duplicate=True,
             duplicate_source_id="doc-duplicate-source",
             anomalies=anomalies,
+            scanned_at=scanned_at,
+            processing_time=processing_time,
         )
 
     return ScanResult(
@@ -222,11 +229,14 @@ def build_result_from_name(task_id: str, filename: str) -> ScanResult:
         is_duplicate=False,
         duplicate_source_id=None,
         anomalies=[],
+        scanned_at=scanned_at,
+        processing_time=processing_time,
     )
 
 
-def build_result_from_text(task_id: str, filename: str, text: str) -> ScanResult:
+def build_result_from_text(task_id: str, filename: str, text: str, processing_time: int = 0) -> ScanResult:
     analysis = analyze_text(text)
+    scanned_at = datetime.now().isoformat()
     return ScanResult(
         file_id=task_id,
         filename=filename,
@@ -236,6 +246,8 @@ def build_result_from_text(task_id: str, filename: str, text: str) -> ScanResult
         is_duplicate=analysis["is_duplicate"],
         duplicate_source_id=analysis["duplicate_source_id"],
         anomalies=analysis["anomalies"],
+        scanned_at=scanned_at,
+        processing_time=processing_time,
     )
 
 
@@ -268,6 +280,7 @@ def get_dashboard_stats():
 
 @app.post("/api/v1/scan/upload", response_model=UploadResponse)
 async def upload_scan(file: UploadFile = File(...)):
+    start_time = datetime.now()
     task_id = str(uuid.uuid4())
     filename = file.filename
     content = await file.read()
@@ -284,11 +297,14 @@ async def upload_scan(file: UploadFile = File(...)):
         except Exception:
             text_content = ""
 
+    # Calculate processing time
+    processing_time = int((datetime.now() - start_time).total_seconds() * 1000)
+
     if text_content.strip():
-        result = build_result_from_text(task_id, filename, text_content)
+        result = build_result_from_text(task_id, filename, text_content, processing_time)
     else:
         # Fallback to filename heuristic or basic safe result
-        result = build_result_from_name(task_id, filename)
+        result = build_result_from_name(task_id, filename, processing_time)
 
     db[task_id] = result.dict()
     return {"task_id": task_id, "message": "File accepted for processing"}

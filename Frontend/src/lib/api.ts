@@ -34,6 +34,8 @@ export type ScanResult = {
   is_duplicate: boolean
   duplicate_source_id: string | null
   anomalies: Anomaly[]
+  scanned_at: string
+  processing_time: number
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -111,6 +113,8 @@ export async function fetchScanResult(taskId: string): Promise<ScanResult> {
         { type: 'Metadata Mismatch', description: 'Creation date is in the future', confidence: 0.98 },
         { type: 'Forged Signature', description: 'Pixel alteration detected', confidence: 0.92 },
       ],
+      scanned_at: new Date().toISOString(),
+      processing_time: 3000,
     }
   }
 
