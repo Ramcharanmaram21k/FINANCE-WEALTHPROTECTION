@@ -22,6 +22,14 @@ export function ExportButton({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
+  const hasData = () => {
+    if (data === null || data === undefined) {
+      alert('No data available to export.')
+      return false
+    }
+    return true
+  }
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -45,11 +53,13 @@ export function ExportButton({
   }, [isOpen])
 
   const handleExportClick = (exportFn: () => void) => {
+    if (!hasData()) return
     setIsOpen(false)
     exportFn()
   }
 
   const exportToJSON = () => {
+    if (!hasData()) return
     setIsExporting(true)
     const json = JSON.stringify(data, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
@@ -63,6 +73,7 @@ export function ExportButton({
   }
 
   const exportToCSV = () => {
+    if (!hasData()) return
     setIsExporting(true)
     try {
       // Convert data to CSV
@@ -88,7 +99,7 @@ export function ExportButton({
       } else if (typeof data === 'object') {
         // Convert object to key-value pairs
         csv = 'Key,Value\n'
-        Object.entries(data).forEach(([key, value]) => {
+        Object.entries(data as Record<string, unknown>).forEach(([key, value]) => {
           csv += `${key},${value}\n`
         })
       }
@@ -107,6 +118,7 @@ export function ExportButton({
   }
 
   const exportToPDF = async () => {
+    if (!hasData()) return
     setIsExporting(true)
     // For PDF export, we'd typically use a library like jsPDF or pdfmake
     // For now, we'll create a simple HTML-based PDF
