@@ -185,7 +185,7 @@ def extract_text_from_file(content: bytes, filename: str) -> str:
     Smart Extraction:
     1) Fast lane: pypdf text (up to first 3 pages). If >50 chars, return immediately.
     2) Slow lane: OCR (pdf2image + pytesseract) only if fast lane is insufficient/empty.
-       - dpi=150, last_page=3 to keep it fast.
+       - dpi=100, first_page=1, last_page=1 (only first page for speed).
     3) Images: direct OCR.
     """
     name = filename.lower()
@@ -210,6 +210,7 @@ def extract_text_from_file(content: bytes, filename: str) -> str:
                     break
                 pages_text.append(page.extract_text() or "")
             fast_text = clean_text(" ".join(pages_text))
+            print(f"Processing PDF: Fast Lane (Text) = {len(fast_text) > 50}, Fallback to OCR = {len(fast_text) <= 50}")
             if len(fast_text) > 50:
                 return fast_text
         except Exception:
@@ -217,7 +218,7 @@ def extract_text_from_file(content: bytes, filename: str) -> str:
 
         # Slow lane: OCR only if fast text insufficient
         try:
-            pages = convert_from_bytes(content, dpi=150, first_page=1, last_page=3)
+            pages = convert_from_bytes(content, dpi=100, first_page=1, last_page=1)
             extracted = []
             for page in pages:
                 gray = page.convert("L")
