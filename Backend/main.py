@@ -180,10 +180,13 @@ def clean_text(text: str) -> str:
     return cleaned.strip()
 
 
-def extract_text_from_file(content: bytes, filename: str, max_pages: int = 10) -> str:
+def extract_text_from_file(content: bytes, filename: str) -> str:
     """
-    Extract text from PDFs (via images + Tesseract) or images directly.
-    Keeps CPU reasonable by limiting pages and simple preprocessing.
+    Smart Extraction:
+    1) Fast lane: pypdf text (up to first 3 pages). If >50 chars, return immediately.
+    2) Slow lane: OCR (pdf2image + pytesseract) only if fast lane is insufficient/empty.
+       - dpi=150, last_page=3 to keep it fast.
+    3) Images: direct OCR.
     """
     name = filename.lower()
 
@@ -196,27 +199,32 @@ def extract_text_from_file(content: bytes, filename: str, max_pages: int = 10) -
         except Exception:
             return ""
 
-    # Handle PDFs: convert pages to images then OCR
+    # Handle PDFs
     if name.endswith(".pdf"):
+        # Fast lane: pypdf text extraction (first 3 pages)
         try:
-            pages = convert_from_bytes(content, dpi=200, first_page=1, last_page=max_pages)
+            reader = PdfReader(io.BytesIO(content))
+            pages_text = []
+            for i, page in enumerate(reader.pages):
+                if i >= 3:
+                    break
+                pages_text.append(page.extract_text() or "")
+            fast_text = clean_text(" ".join(pages_text))
+            if len(fast_text) > 50:
+                return fast_text
+        except Exception:
+            fast_text = ""
+
+        # Slow lane: OCR only if fast text insufficient
+        try:
+            pages = convert_from_bytes(content, dpi=150, first_page=1, last_page=3)
             extracted = []
             for page in pages:
                 gray = page.convert("L")
                 extracted.append(pytesseract.image_to_string(gray))
             return clean_text(" ".join(extracted))
         except Exception:
-            # Fallback to pypdf text extract if OCR fails
-            try:
-                reader = PdfReader(io.BytesIO(content))
-                pages_text = []
-                for i, page in enumerate(reader.pages):
-                    if i >= max_pages:
-                        break
-                    pages_text.append(page.extract_text() or "")
-                return clean_text(" ".join(pages_text))
-            except Exception:
-                return ""
+            return fast_text or ""
 
     # Unknown file type: return empty
     return ""
